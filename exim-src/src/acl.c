@@ -1,4 +1,4 @@
-/* $Cambridge: exim/exim-src/src/acl.c,v 1.17 2005/01/12 15:41:27 ph10 Exp $ */
+/* $Cambridge: exim/exim-src/src/acl.c,v 1.11 2005/01/04 10:00:42 ph10 Exp $ */
 
 /*************************************************
 *     Exim - an Internet mail transport agent    *
@@ -216,7 +216,6 @@ each condition, there's a bitmap of dis-allowed times. */
 
 static unsigned int cond_forbids[] = {
   0,                                               /* acl */
-   
   (1<<ACL_WHERE_NOTSMTP)|(1<<ACL_WHERE_CONNECT)|   /* authenticated */
     (1<<ACL_WHERE_HELO),
   
@@ -271,9 +270,7 @@ static unsigned int cond_forbids[] = {
 
   (1<<ACL_WHERE_NOTSMTP)|(1<<ACL_WHERE_CONNECT)|   /* encrypted */
     (1<<ACL_WHERE_HELO),
-     
   0,                                               /* endpass */
-   
   (1<<ACL_WHERE_NOTSMTP),                          /* hosts */
 
   (1<<ACL_WHERE_NOTSMTP)|(1<<ACL_WHERE_AUTH)|      /* local_parts */
@@ -285,7 +282,6 @@ static unsigned int cond_forbids[] = {
     (1<<ACL_WHERE_VRFY),
 
   0,                                               /* log_message */
-   
   0,                                               /* logwrite */
   
 #ifdef WITH_CONTENT_SCAN
@@ -389,42 +385,27 @@ static unsigned int control_forbids[] = {
 #ifdef EXPERIMENTAL_BRIGHTMAIL
   0,                                               /* bmi_run */
 #endif
-
   0,                                               /* error */
-  
-  (unsigned int) 
   ~(1<<ACL_WHERE_RCPT),                            /* caseful_local_part */
-   
-  (unsigned int) 
   ~(1<<ACL_WHERE_RCPT),                            /* caselower_local_part */
-   
   (1<<ACL_WHERE_NOTSMTP),                          /* enforce_sync */
-   
   (1<<ACL_WHERE_NOTSMTP),                          /* no_enforce_sync */
    
-  (unsigned int) 
   ~((1<<ACL_WHERE_MAIL)|(1<<ACL_WHERE_RCPT)|       /* freeze */
     (1<<ACL_WHERE_PREDATA)|(1<<ACL_WHERE_DATA)|
     (1<<ACL_WHERE_NOTSMTP)),
      
-  (unsigned int) 
   ~((1<<ACL_WHERE_MAIL)|(1<<ACL_WHERE_RCPT)|       /* queue_only */
     (1<<ACL_WHERE_PREDATA)|(1<<ACL_WHERE_DATA)|
     (1<<ACL_WHERE_NOTSMTP)),
      
-  (unsigned int) 
   ~((1<<ACL_WHERE_MAIL)|(1<<ACL_WHERE_RCPT)|       /* submission */
     (1<<ACL_WHERE_PREDATA)),                       
 
 #ifdef WITH_CONTENT_SCAN
-  (unsigned int) 
-  ~((1<<ACL_WHERE_MAIL)|(1<<ACL_WHERE_RCPT)|       /* no_mbox_unspool */
-    (1<<ACL_WHERE_PREDATA)|(1<<ACL_WHERE_DATA)),
+  (1<<ACL_WHERE_NOTSMTP),                          /* no_mbox_unspool */
 #endif
-
-  (unsigned int) 
-  ~((1<<ACL_WHERE_MAIL)|(1<<ACL_WHERE_RCPT)|       /* fakereject */
-    (1<<ACL_WHERE_PREDATA)|(1<<ACL_WHERE_DATA)),
+  (1<<ACL_WHERE_NOTSMTP),                          /* fakereject */
 
   (1<<ACL_WHERE_NOTSMTP)                           /* no_multiline */
 };
@@ -1345,10 +1326,8 @@ else
   rc = verify_address(&addr2, NULL, verify_options|vopt_is_recipient, callout,
     callout_overall, callout_connect, se_mailfrom, pm_mailfrom, NULL);
   HDEBUG(D_acl) debug_printf("----------- end verify ------------\n");
-  
   *log_msgptr = addr2.message;
-  *user_msgptr = (addr2.user_message != NULL)? 
-    addr2.user_message : addr2.message;
+  *user_msgptr = addr2.user_message;
   *basic_errno = addr2.basic_errno;
 
   /* Make $address_data visible */
@@ -1684,7 +1663,7 @@ for (; cb != NULL; cb = cb->next)
        else
         {
         /* Explicitly reset to default string */
-        fake_reject_text = US"Your message has been rejected but is being kept for evaluation.\nIf it was a legitimate message, it may still be delivered to the target recipient(s).";
+        fake_reject_text = US"Your message has been rejected but is being kept for evaluation.\nIf it was a legit message, it may still be delivered to the target recipient(s).";
         }
       break;
 
@@ -1749,10 +1728,7 @@ for (; cb != NULL; cb = cb->next)
           HDEBUG(D_acl)
             debug_printf("delay skipped in -bh checking mode\n");
           }
-        else 
-          {
-          while (delay > 0) delay = sleep(delay);
-          } 
+        else sleep(delay);
         }
       }
     break;
