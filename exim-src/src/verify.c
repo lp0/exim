@@ -1,4 +1,4 @@
-/* $Cambridge: exim/exim-src/src/verify.c,v 1.9 2005/01/04 10:00:42 ph10 Exp $ */
+/* $Cambridge: exim/exim-src/src/verify.c,v 1.13 2005/01/14 10:25:33 ph10 Exp $ */
 
 /*************************************************
 *     Exim - an Internet mail transport agent    *
@@ -377,6 +377,7 @@ for (host = host_list; host != NULL && !done; host = host->next)
   smtp_outblock outblock;
   int host_af;
   int port = 25;
+  BOOL send_quit = TRUE; 
   uschar *helo = US"HELO";
   uschar *interface = NULL;  /* Outgoing interface to use; NULL => any */
   uschar inbuffer[4096];
@@ -609,6 +610,7 @@ for (host = host_list; host != NULL && !done; host = host->next)
     if (errno == ETIMEDOUT)
       {
       HDEBUG(D_verify) debug_printf("SMTP timeout\n");
+      send_quit = FALSE; 
       }
     else if (errno == 0)
       {
@@ -637,7 +639,7 @@ for (host = host_list; host != NULL && !done; host = host->next)
 
   /* End the SMTP conversation and close the connection. */
 
-  (void)smtp_write_command(&outblock, FALSE, "QUIT\r\n");
+  if (send_quit) (void)smtp_write_command(&outblock, FALSE, "QUIT\r\n");
   close(inblock.sock);
   }    /* Loop through all hosts, while !done */
 
@@ -1049,7 +1051,8 @@ while (addr_new != NULL)
             for (host = host_list; host != NULL; host = nexthost)
               {
               nexthost = host->next;
-              if (tf.gethostbyname || string_is_ip_address(host->name, NULL))
+              if (tf.gethostbyname || 
+                  string_is_ip_address(host->name, NULL) > 0)
                 (void)host_find_byname(host, NULL, &canonical_name, TRUE);
               else
                 {
@@ -1099,7 +1102,7 @@ while (addr_new != NULL)
   want to continue to verify the new child. */
 
   if (rc == REROUTED) continue;
-
+  
   /* Handle hard failures */
 
   if (rc == FAIL)
@@ -1554,7 +1557,7 @@ for (i = 0; i < 3; i++)
             }
           }
 
-        /* Else go ahead with the sender verification. But is isn't *the*
+        /* Else go ahead with the sender verification. But it isn't *the*
         sender of the message, so set vopt_fake_sender to stop sender_address
         being replaced after rewriting or qualification. */
 
@@ -1830,7 +1833,7 @@ if (*ss == '@')
 /* If the pattern is an IP address, optionally followed by a bitmask count, do
 a (possibly masked) comparision with the current IP address. */
 
-if (string_is_ip_address(ss, &maskoffset))
+if (string_is_ip_address(ss, &maskoffset) > 0)
   return (host_is_in_net(cb->host_address, ss, maskoffset)? OK : FAIL);
 
 /* If the item is of the form net[n]-lookup;<file|query> then it is a lookup on
@@ -2600,7 +2603,7 @@ while ((domain = string_nextinlist(&list, &sep, buffer, sizeof(buffer))) != NULL
     while ((keydomain = string_nextinlist(&key, &keysep, keybuffer, 
             sizeof(keybuffer))) != NULL)
       {       
-      if (string_is_ip_address(keydomain, NULL))
+      if (string_is_ip_address(keydomain, NULL) > 0)
         {
         uschar keyrevadd[128];
         invert_address(keyrevadd, keydomain);
