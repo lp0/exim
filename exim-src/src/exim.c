@@ -3593,6 +3593,7 @@ if (!admin_user)
      (count_queue && queue_list_requires_admin) ||
      (list_queue && queue_list_requires_admin) ||
      (queue_interval >= 0 && prod_requires_admin) ||
+     (list_options) ||
      (debugset && !running_in_test_harness))
     {
     fprintf(stderr, "exim:%s permission denied\n", debugset? " debugging" : "");
