@@ -3162,8 +3162,8 @@ if (((1<<rc) & msgcond[verb]) != 0)
   during expansions. */
 
   if (verb == ACL_WARN ||
-      (rc == OK && (verb == ACL_ACCEPT || verb == ACL_DISCARD)))
-    *log_msgptr = *user_msgptr = NULL;
+      (rc == OK && (verb == ACL_ACCEPT || verb == ACL_DISCARD || verb == ACL_REQUIRE)))
+    if (verb == ACL_WARN) *log_msgptr = *user_msgptr = NULL;
 
   if (user_message != NULL)
     {
@@ -3176,6 +3176,7 @@ if (((1<<rc) & msgcond[verb]) != 0)
           user_message, expand_string_message);
       }
     else if (expmessage[0] != 0) *user_msgptr = expmessage;
+    else *user_msgptr = NULL;
     }
 
   if (log_message != NULL)
@@ -3351,6 +3352,7 @@ int fd = -1;
 acl_block *acl = NULL;
 uschar *acl_name = US"inline ACL";
 uschar *ss;
+BOOL require_message = FALSE;
 
 /* Catch configuration loops */
 
@@ -3473,7 +3475,9 @@ while (acl != NULL)
   int basic_errno = 0;
   BOOL endpass_seen = FALSE;
 
-  *log_msgptr = *user_msgptr = NULL;
+  *log_msgptr = NULL;
+  /* If a "require" verb returned a message (only set when processing a DATA ACL), don't reset it. */
+  if (!require_message) *user_msgptr = NULL;
   acl_temp_details = FALSE;
 
   if ((where == ACL_WHERE_QUIT || where == ACL_WHERE_NOTQUIT) &&
@@ -3584,6 +3588,8 @@ while (acl != NULL)
 
     case ACL_REQUIRE:
     if (cond != OK) return cond;
+    /* If this is a DATA ACL, the message needs to be preserved. */
+    if (where == ACL_WHERE_DATA) require_message = (*user_msgptr != NULL ? TRUE : FALSE);
     break;
 
     case ACL_WARN:
@@ -3611,6 +3617,7 @@ while (acl != NULL)
 /* We have reached the end of the ACL. This is an implicit DENY. */
 
 HDEBUG(D_acl) debug_printf("end of %s: implicit DENY\n", acl_name);
+if (require_message) *user_msgptr = NULL;
 return FAIL;
 }
 
