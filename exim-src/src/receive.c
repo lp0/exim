@@ -3406,8 +3406,13 @@ if ((log_extra_selector & LX_tls_peerdn) != 0 && tls_peerdn != NULL)
 if (sender_host_authenticated != NULL)
   {
   s = string_append(s, &size, &sptr, 2, US" A=", sender_host_authenticated);
-  if (authenticated_id != NULL)
-    s = string_append(s, &size, &sptr, 2, US":", authenticated_id);
+  if (authenticated_id != NULL && Ustrlen(authenticated_id) > 0)
+    {
+      if (Ustrchr(authenticated_id, ' ') != NULL)
+        s = string_append(s, &size, &sptr, 3, US":\"", authenticated_id, US"\"");
+      else
+        s = string_append(s, &size, &sptr, 2, US":", authenticated_id);
+    }
   }
 
 sprintf(CS big_buffer, "%d", msg_size);
