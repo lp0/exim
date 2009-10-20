@@ -3173,11 +3173,12 @@ while (done <= 0)
     smtp_mailcmd_count++;              /* Count for limit and ratelimit */
     was_rej_mail = TRUE;               /* Reset if accepted */
 
-    if (helo_required && !helo_seen)
+    /* RFC 2821 4.1.1.1:
+       "In any event, a client MUST issue HELO or EHLO before starting a mail transaction" */
+    if (/*helo_required &&*/ !helo_seen)
       {
-      smtp_printf("503 HELO or EHLO required\r\n");
-      log_write(0, LOG_MAIN|LOG_REJECT, "rejected MAIL from %s: no "
-        "HELO/EHLO given", host_and_ident(FALSE));
+      done = synprot_error(L_smtp_protocol_error, 503, NULL,
+        US"HELO/EHLO required");
       break;
       }
 
