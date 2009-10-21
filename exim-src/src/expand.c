@@ -108,6 +108,7 @@ static uschar *item_table[] = {
   US"extract",
   US"filter",
   US"hash",
+  US"helocache",
   US"hmac",
   US"if",
   US"length",
@@ -130,6 +131,7 @@ enum {
   EITEM_EXTRACT,
   EITEM_FILTER,
   EITEM_HASH,
+  EITEM_HELOCACHE,
   EITEM_HMAC,
   EITEM_IF,
   EITEM_LENGTH,
@@ -4980,6 +4982,112 @@ while (*s != 0)
         }
       }
     #endif /* EXPAND_DLFUNC */
+
+    /* Handle HELO cache checking */
+    case EITEM_HELOCACHE:
+      {
+      uschar *sub[2];
+      
+      switch (read_subs(sub, 2, 2, &s, skipping, TRUE, name))
+        {
+        case 1: goto EXPAND_FAILED_CURLY;
+        case 2: goto EXPAND_FAILED;
+        }
+
+      if (Ustrcmp(sub[0], "count") == 0)
+        {
+        int n = readconf_readtime(sub[1], 0, FALSE);
+        if (sub[1][0] == '0' && sub[1][1] == '\0') n = 0;
+        if (n < 0)
+          {
+          expand_string_message = string_sprintf("string \"%s\" is not an "
+            "Exim time interval in \"%s\" operator", sub[1], name);
+          goto EXPAND_FAILED;
+          }
+        else if (n == 0)
+          {
+          sprintf(CS var_buffer, "%d", helo_cache_count);
+          yield = string_cat(yield, &size, &ptr, var_buffer, Ustrlen(var_buffer));
+          }
+        else
+          {
+          helo_cache_record_t *tmp = helo_cache_records;
+          time_t now = time(NULL);
+          int count = 0;
+
+          while (tmp != NULL)
+            {
+            if (now - tmp->time <= n) count++;
+            tmp = tmp->next;
+            }
+
+          sprintf(CS var_buffer, "%d", count);
+          yield = string_cat(yield, &size, &ptr, var_buffer, Ustrlen(var_buffer));
+          }
+        }
+      else if (Ustrcmp(sub[0], "name") == 0)
+        {
+        int n;
+        uschar *t = read_number(&n, sub[1]);
+        if (*t != 0 || n < 1)
+          {
+          expand_string_message = string_sprintf("string \"%s\" is not a "
+            "positive number in \"%s\" operator", sub[1], name);
+          goto EXPAND_FAILED;
+          }
+        else
+          {
+          helo_cache_record_t *tmp = helo_cache_records;
+          int i;
+
+          n--;
+          var_buffer[0] = 0;
+
+          for (i = 0; i <= n && i < helo_cache_count && tmp != NULL; i++)
+            {
+            if (i == n)
+              yield = string_cat(yield, &size, &ptr, tmp->name, Ustrlen(tmp->name));
+            tmp = tmp->next;
+            }
+          }
+        }
+      else if (Ustrcmp(sub[0], "time") == 0)
+        {
+        int n;
+        uschar *t = read_number(&n, sub[1]);
+        if (*t != 0 || n < 1)
+          {
+          expand_string_message = string_sprintf("string \"%s\" is not a "
+            "positive number in \"%s\" operator", sub[1], name);
+          goto EXPAND_FAILED;
+          }
+        else
+          {
+          helo_cache_record_t *tmp = helo_cache_records;
+          int i;
+
+          n--;
+          var_buffer[0] = 0;
+
+          for (i = 0; i <= n && i < helo_cache_count && tmp != NULL; i++)
+            {
+            if (i == n)
+              sprintf(CS var_buffer, "%d", tmp->time);
+            tmp = tmp->next;
+            }
+
+          yield = string_cat(yield, &size, &ptr, var_buffer, Ustrlen(var_buffer));
+          }
+        }
+      else
+        {
+        expand_string_message =
+          string_sprintf("helocache option \"%s\" is not recognised", sub[0]);
+        goto EXPAND_FAILED;
+        }
+
+      continue;
+	  }
     }
 
   /* Control reaches here if the name is not recognized as one of the more

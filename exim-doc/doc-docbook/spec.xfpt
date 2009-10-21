@@ -12338,6 +12338,9 @@ listed in more than one group.
 .row &%header_line_maxsize%&         "individual header line limit"
 .row &%helo_accept_junk_hosts%&      "allow syntactic junk from these hosts"
 .row &%helo_allow_chars%&            "allow illegal chars in HELO names"
+.row &%helo_cache%&                  "cache HELO names used by hosts"
+.row &%helo_cache_max%&              "maximum number of unique HELO names to cache"
+.row &%helo_cache_time%&             "maximum duration of unique HELO names to cache"
 .row &%helo_lookup_domains%&         "lookup hostname for these HELO names"
 .row &%helo_try_verify_hosts%&       "HELO soft-checked for these hosts"
 .row &%helo_verify_hosts%&           "HELO hard-checked for these hosts"
@@ -13424,6 +13427,23 @@ hyphens, and dots. If you really must allow underscores, you can set
 helo_allow_chars = _
 .endd
 Note that the value is one string, not a list.
+
+
+.option helo_cache main boolean false
+.cindex "HELO" "cache"
+.cindex "EHLO" "cache"
+Enables or disables caching of HELO or EHLO names used per IP, making the
+data available using &%${helocache ...}%&.
+
+
+.option helo_cache_max main integer 4
+Sets the maximum number of HELO or EHLO names to cache per IP.
+
+
+.option helo_cache_time main time 1d
+Sets the maximum time any specific HELO or EHLO name is cached per IP.
+
+Note that whole records older than this are not automatically removed.
 
 
 .option helo_lookup_domains main "domain list&!!" &`@:@[]`&

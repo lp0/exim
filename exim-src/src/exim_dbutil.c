@@ -68,6 +68,7 @@ not too much extra baggage. */
 #define type_misc      3
 #define type_callout   4
 #define type_ratelimit 5
+#define type_helocache 6
 
 
 
@@ -120,7 +121,7 @@ static void
 usage(uschar *name, uschar *options)
 {
 printf("Usage: exim_%s%s  <spool-directory> <database-name>\n", name, options);
-printf("  <database-name> = retry | misc | wait-<transport-name> | callout | ratelimit\n");
+printf("  <database-name> = retry | misc | wait-<transport-name> | callout | ratelimit | helocache\n");
 exit(1);
 }
 
@@ -143,6 +144,7 @@ if (argc == 3)
   if (Ustrncmp(argv[2], "wait-", 5) == 0) return type_wait;
   if (Ustrcmp(argv[2], "callout") == 0) return type_callout;
   if (Ustrcmp(argv[2], "ratelimit") == 0) return type_ratelimit;
+  if (Ustrcmp(argv[2], "helocache") == 0) return type_helocache;
   }
 usage(name, options);
 return -1;              /* Never obeyed */
@@ -545,6 +547,7 @@ while (key != NULL)
   dbdata_wait *wait;
   dbdata_callout_cache *callout;
   dbdata_ratelimit *ratelimit;
+  dbdata_helo_cache *helocache;
   int count_bad = 0;
   int i, length;
   uschar *t;
@@ -679,6 +682,33 @@ while (key != NULL)
         print_time(ratelimit->time_stamp), ratelimit->time_usec,
         ratelimit->rate, keybuffer);
 
+      break;
+
+      case type_helocache:
+      helocache = (dbdata_helo_cache *)value;
+        {
+        dbdata_helo_cache_entry *entry = helocache->data;
+        int count_min = 0, count_hour = 0, count_day = 0;
+
+        for (i = 0; i < helocache->count; i++)
+          {
+            if (helocache->time_stamp - entry->time_stamp <= 60) count_min++;
+            if (helocache->time_stamp - entry->time_stamp <= 3600) count_hour++;
+            if (helocache->time_stamp - entry->time_stamp <= 86400) count_day++;
+
+            /* Move to next entry */
+            entry = (dbdata_helo_cache_entry*)((void*)entry
+              + sizeof(dbdata_helo_cache_entry) + sizeof(uschar) * (Ustrlen(entry->name) + 1));
+          }
+          
+         printf("%s %s entries=%d min=%d hour=%d day=%d\n",
+            print_time(helocache->time_stamp),
+            keybuffer,
+            helocache->count,
+            count_min,
+            count_hour,
+            count_day);
+        }
       break;
       }
     store_reset(value);
