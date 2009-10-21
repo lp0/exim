@@ -1427,6 +1427,229 @@ return yield;
 
 
 
+/*************************
+*  Load helo cache data  *
+**************************/
+
+/* This function makes a record of the helo cache.
+
+Arguments:
+   now            Current time
+   helo_record    Record to load
+   helo_name      HELO/EHLO to add
+
+Returns:          The hints record size of the data
+*/
+
+static int
+load_helo_record(time_t now, dbdata_helo_cache *helo_record, uschar *helo_name)
+{
+dbdata_helo_cache_entry *entry;
+helo_cache_record_t *tmp = helo_cache_records, *prev = NULL;
+int i, j, size = 0, found = 0;
+
+helo_cache_records = NULL;
+while (tmp != NULL)
+  {
+  if (tmp->name != NULL)
+    store_free(tmp->name);
+  prev = tmp;
+  tmp = tmp->next;
+  store_free(prev);
+  }
+
+if (helo_record == NULL)
+	helo_cache_count = 0;
+else
+  {
+  helo_cache_count = helo_record->count;
+  entry = helo_record->data;
+  }
+
+/* if there's a new record, lower the maximum by starting i at 1 */
+for (j = 0, i = (helo_name != NULL ? 1 : 0); j < helo_cache_count && i < helo_cache_max; j++, i++)
+  {
+  /* skip expired/invalid entries */
+  if (now - entry->time_stamp > helo_cache_time || Ustrlen(entry->name) == 0)
+    {
+    helo_cache_count--;
+    j--;
+    }
+  else
+    {
+    if (helo_cache_records == NULL)
+      {
+      tmp = store_malloc(sizeof(helo_cache_record_t));
+      helo_cache_records = tmp;
+      }
+    else
+      {
+      prev = tmp;
+      tmp = store_malloc(sizeof(helo_cache_record_t));
+      prev->next = tmp;
+      }
+
+    tmp->name = string_copy_malloc(entry->name);
+    size += sizeof(dbdata_helo_cache_entry) + sizeof(uschar) * (Ustrlen(tmp->name) + 1);
+    tmp->time = entry->time_stamp;
+    tmp->next = NULL;
+
+    if (!found && helo_name != NULL && !Ustrncmp(tmp->name, helo_name, Ustrlen(helo_name)))
+      {
+      found = 1;
+      i--; /* raise the maximum to normal since no new entry will be needed */
+
+      tmp->time = now;
+      if (helo_cache_records != tmp)
+        {
+        if (prev != NULL)
+          prev->next = NULL;
+        tmp->next = helo_cache_records;
+        helo_cache_records = tmp;
+        tmp = prev;
+        }
+      }
+    }
+  entry = (dbdata_helo_cache_entry*)((void*)entry
+    + sizeof(dbdata_helo_cache_entry) + sizeof(uschar) * (Ustrlen(entry->name) + 1));
+  }
+helo_cache_count = j;
+
+if (!found && helo_name != NULL)
+  {
+  tmp = store_malloc(sizeof(helo_cache_record_t));
+  tmp->name = string_copy_malloc(helo_name);
+  size += sizeof(dbdata_helo_cache_entry) + sizeof(uschar) * (Ustrlen(tmp->name) + 1);
+  tmp->time = now;
+  tmp->next = helo_cache_records;
+  helo_cache_records = tmp;
+  helo_cache_count++;
+  }
+
+return size;
+}
+
+
+
+
+/*****************************
+*  Read a helo cache record  *
+*****************************/
+
+/* This function reads a helo cache record using the IP address as a string
+as the key.
+
+Arguments:
+   address        IP address of sender
+
+Returns:          nothing
+*/
+
+static void
+read_helo_cache(uschar *address)
+{
+time_t now = time(NULL);
+open_db dbblock;
+open_db *dbm_file;
+dbdata_helo_cache *helo_record;
+helo_cache_record_t *tmp;
+
+if ((dbm_file = dbfn_open(US"helocache", O_RDONLY, &dbblock, FALSE)) == NULL)
+  {
+  DEBUG(D_receive)
+    debug_printf("no HELO/EHLO cache data available\n");
+  return;
+  }
+
+helo_record = dbfn_read(dbm_file, address);
+
+if (helo_record != NULL && now - helo_record->time_stamp > helo_cache_time)
+  helo_record = NULL;
+
+load_helo_record(now, helo_record, NULL);
+
+if (helo_record != NULL)
+  DEBUG(D_receive)
+    {
+    debug_printf("Loaded helo data cache item for %s (%d entries)\n", address, helo_cache_count);
+    }
+
+dbfn_close(dbm_file);
+}
+
+
+
+
+/******************************
+*  Store a helo cache record  *
+******************************/
+
+/* This function stores a helo cache record using the IP address as a string
+as the key and the argument to HELO/EHLO as the value.
+
+Arguments:
+   address        IP address of sender
+   arg            argument to HELO/EHLO
+
+Returns:          nothing
+*/
+
+static void
+write_helo_cache(uschar *address, uschar *arg)
+{
+time_t now = time(NULL);
+open_db dbblock;
+open_db *dbm_file;
+dbdata_helo_cache *helo_record;
+dbdata_helo_cache_entry *entry;
+helo_cache_record_t *tmp, *prev;
+int i, size;
+
+if ((dbm_file = dbfn_open(US"helocache", O_RDWR, &dbblock, FALSE)) == NULL)
+  {
+  DEBUG(D_receive)
+    debug_printf("no HELO/EHLO cache data available\n");
+  return;
+  }
+
+helo_record = dbfn_read(dbm_file, address);
+
+if (helo_record != NULL && now - helo_record->time_stamp > helo_cache_time)
+  {
+  dbfn_delete(dbm_file, address);
+  helo_record = NULL;
+  }
+
+size = load_helo_record(now, helo_record, arg);
+
+helo_record = store_malloc(sizeof(dbdata_helo_cache) + size);
+helo_record->count = helo_cache_count;
+
+entry = helo_record->data;
+tmp = helo_cache_records;
+while (tmp != NULL)
+  {
+  Ustrcpy(entry->name, tmp->name);
+  entry->time_stamp = tmp->time;
+  entry = (dbdata_helo_cache_entry*)((void*)entry
+    + sizeof(dbdata_helo_cache_entry) + sizeof(uschar) * (Ustrlen(tmp->name) + 1));
+  tmp = tmp->next;
+  }
+
+DEBUG(D_receive)
+  {
+  debug_printf("Writing helo data cache item for %s (%d entries)\n", address, helo_cache_count);
+  }
+
+(void)dbfn_write(dbm_file, address, helo_record,
+  sizeof(dbdata_helo_cache) + size);
+
+store_free(helo_record);
+dbfn_close(dbm_file);
+}
+
+
+
 
 /*************************************************
 *         Extract SMTP command option            *
@@ -2308,6 +2531,10 @@ if (!sender_host_unknown)
 /* For batch SMTP input we are now done. */
 
 if (smtp_batched_input) return TRUE;
+
+/* Load HELO/EHLO cache. */
+if (sender_host_address && helo_cache)
+  read_helo_cache(sender_host_address);
 
 #ifdef SUPPORT_PROXY
 /* If valid Proxy Protocol source is connecting, set up session.
@@ -3458,6 +3685,11 @@ while (done <= 0)
     HELO_EHLO:      /* Common code for HELO and EHLO */
     cmd_list[CMD_LIST_HELO].is_mail_cmd = FALSE;
     cmd_list[CMD_LIST_EHLO].is_mail_cmd = FALSE;
+
+    /* Compare the current HELO/EHLO value from this host to what the host
+     * identified itself as last time. */
+    if (sender_host_address && helo_cache)
+      write_helo_cache(sender_host_address, smtp_cmd_argument);
 
     /* Reject the HELO if its argument was invalid or non-existent. A
     successful check causes the argument to be saved in malloc store. */

@@ -662,4 +662,20 @@ typedef struct {
 } dbdata_ratelimit_unique;
 
 
+/* This structure records how hosts identify themselves by HELO/EHLO. The key
+is the IP address of the connecting host. */
+
+typedef struct {
+  time_t time_stamp;
+  /*************/
+  uschar name[0];
+} dbdata_helo_cache_entry;
+
+typedef struct {
+  time_t time_stamp;
+  /*************/
+  int    count;          /* Count of the helo names stored */
+  dbdata_helo_cache_entry data[0];
+} dbdata_helo_cache;
+
 /* End of dbstuff.h */

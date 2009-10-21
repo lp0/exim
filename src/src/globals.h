@@ -484,6 +484,17 @@ extern int     header_names_size;      /* Number of entries */
 extern BOOL    header_rewritten;       /* TRUE if header changed by router */
 extern uschar *helo_accept_junk_hosts; /* Allowed to use junk arg */
 extern uschar *helo_allow_chars;       /* Rogue chars to allow in HELO/EHLO */
+extern BOOL    helo_cache;
+extern int     helo_cache_max;
+extern int     helo_cache_time;
+extern int     helo_cache_count;
+struct helo_cache_record {
+  uschar *name;
+  time_t time;
+  struct helo_cache_record *next;
+};
+typedef struct helo_cache_record helo_cache_record_t;
+extern helo_cache_record_t *helo_cache_records;
 extern uschar *helo_lookup_domains;    /* If these given, lookup host name */
 extern uschar *helo_try_verify_hosts;  /* Soft check HELO argument for these */
 extern BOOL    helo_verified;          /* True if HELO verified */
