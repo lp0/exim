@@ -253,11 +253,12 @@ if (type == lt_process)
 
 /* The names of the other three logs are controlled by file_path. The panic log
 is written to the same directory as the main and reject logs, but its name does
-not have a datestamp. The use of datestamps is indicated by %D in file_path.
-When opening the panic log, if %D is present, we remove the datestamp from the
-generated name; if it is at the start, remove a following non-alphameric
-character as well; otherwise, remove a preceding non-alphameric character. This
-is definitely kludgy, but it sort of does what people want, I hope. */
+not have a datestamp. The use of datestamps is indicated by %D/%M in file_path.
+When opening the panic log, if %D or %M is present, we remove the datestamp
+from the generated name; if it is at the start, remove a following
+non-alphanumeric character as well; otherwise, remove a preceding
+non-alphanumeric character. This is definitely kludgy, but it sort of does what
+people want, I hope. */
 
 else
   {
@@ -289,7 +290,7 @@ else
   else if (string_datestamp_offset >= 0)
     {
     uschar *from = buffer + string_datestamp_offset;
-    uschar *to = from + Ustrlen(tod_stamp(tod_log_datestamp));
+    uschar *to = from + string_datestamp_length;
     if (from == buffer || from[-1] == '/')
       {
       if (!isalnum(*to)) to++;
@@ -831,7 +832,7 @@ if ((flags & LOG_MAIN) != 0 &&
 
     if (mainlog_datestamp != NULL)
       {
-      uschar *nowstamp = tod_stamp(tod_log_datestamp);
+      uschar *nowstamp = tod_stamp(string_datestamp_type);
       if (Ustrncmp (mainlog_datestamp, nowstamp, Ustrlen(nowstamp)) != 0)
         {
         (void)close(mainlogfd);       /* Close the file */
@@ -954,7 +955,7 @@ if ((flags & LOG_REJECT) != 0)
 
     if (rejectlog_datestamp != NULL)
       {
-      uschar *nowstamp = tod_stamp(tod_log_datestamp);
+      uschar *nowstamp = tod_stamp(string_datestamp_type);
       if (Ustrncmp (rejectlog_datestamp, nowstamp, Ustrlen(nowstamp)) != 0)
         {
         (void)close(rejectlogfd);       /* Close the file */
